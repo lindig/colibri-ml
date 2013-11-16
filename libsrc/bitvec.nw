@@ -128,12 +128,12 @@ type t =
     }
 
 let (@@) f x = f x
-let (<<) = (lsl)    (* shift left  *)
+let (@<<) = (lsl)    (* shift left  *)
 let (>>) = (lsr)    (* shift right *)
 
 let wordsize =
   let rec probe size =
-    if 1 << size = 0 then size else probe (size + 1)
+    if 1 @<< size = 0 then size else probe (size + 1)
   in
     probe 1
 
@@ -154,7 +154,7 @@ let limit t     = Array.length t.words - 1
 let msbmask size =
     let bits = size mod wordsize in
         if bits > 0
-        then lnot (ones << bits)
+        then lnot (ones @<< bits)
         else ones
 
 let isvalid t = 
@@ -227,8 +227,8 @@ let put t bit bool =
     assert (0 <= bit && bit < t.size);
     t.words.(bit/wordsize) <- 
         ( match bool with 
-        | true  -> t.words.(bit/wordsize) lor        (1 << (bit mod wordsize))  
-        | false -> t.words.(bit/wordsize) land (lnot (1 << (bit mod wordsize)))
+        | true  -> t.words.(bit/wordsize) lor        (1 @<< (bit mod wordsize))  
+        | false -> t.words.(bit/wordsize) land (lnot (1 @<< (bit mod wordsize)))
         )
     ; assert (get t bit = bool)
 @
