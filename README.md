@@ -110,7 +110,7 @@ code. For compilation source code is automatically extracted.
 
 Source code is available from GitHub
 
-    svn co svn://svn.vistabella.de/colibri
+    https://github.com/lindig/colibri-ml.git
 
 ## Author 
 
