@@ -26,6 +26,7 @@ clean:
 
 clobber: clean
 	$(MAKE) -C lipsum clean
+	rm -f doc/colibri.1
 
 install: all doc/colibri.1
 	install $(NAME).$(BINEXT) $(BINDIR)/$(NAME) 
