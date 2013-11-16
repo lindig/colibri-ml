@@ -1,8 +1,10 @@
 
+# Colibri
+
 This is Colibri, a library and a demo application for formal concept
 analysis implemented in Objective Caml.
 
-== Concept Analysis
+## Concept Analysis
 
 Formal Concept Analysis is an algebraic theory for binary relations.
 Every binary relation induces a complete lattice of so-called concepts.
@@ -15,26 +17,26 @@ book for concept analysis is:
 
     http://www.amazon.com/gp/product/3540627715/104-1061763-0179914
 
-== Example
+## Example
 
 What are concepts and what is a concept lattice? A binary relation
 over objects and associated attributes may be represented
 as a context table:
 
-objects		attributes
--------------------------------------------------------------
-chmod:		change file mode permission ;
-chown:		change file group owner;
-fstat:		get file status ;
-fork:		create new process ;
-chdir:		change directory ;
-mkdir:		create directory new ;
-open:		create file open read write;
-read:		file input read ;
-rmdir:		directory file remove ;
-write:		file output write ;
-creat:		create file new ;
-access:		access check file ;
+    objects		attributes
+    -------------------------------------------------------------
+    chmod:		change file mode permission ;
+    chown:		change file group owner;
+    fstat:		get file status ;
+    fork:		create new process ;
+    chdir:		change directory ;
+    mkdir:		create directory new ;
+    open:		create file open read write;
+    read:		file input read ;
+    rmdir:		directory file remove ;
+    write:		file output write ;
+    creat:		create file new ;
+    access:		access check file ;
 
 Here objects are Unix system calls and attributes are associated terms
 describing a system call. Any set of objects shares a (possibly empty)
@@ -56,63 +58,63 @@ complete set of concepts from the example above is shown below. Each
 concept contains a unique number, the set of objects and the set of
 attributes.
 
-{0 {access creat write rmdir read open mkdir chdir fork fstat chown chmod} {}}
-{1 {access creat write rmdir read open fstat chown chmod} {file}}
-{2 {access} {file check access}}
-{3 {creat open mkdir fork} {create}}
-{4 {creat open} {file create}}
-{5 {creat mkdir fork} {new create}}
-{6 {creat} {file new create}}
-{7 {write open} {file write}}
-{8 {write} {file write output}}
-{9 {rmdir mkdir chdir} {directory}}
-{10 {rmdir} {file remove directory}}
-{11 {read open} {file read}}
-{12 {read} {file read input}}
-{13 {open} {file create write read open}}
-{14 {mkdir} {new create directory}}
-{15 {chdir chown chmod} {change}}
-{16 {chdir} {directory change}}
-{17 {fork} {new create process}}
-{18 {fstat} {file status get}}
-{19 {chown chmod} {file change}}
-{20 {chown} {file change owner group}}
-{21 {chmod} {file change permission mode}}
-{22 {} {file check access new create write output remove directory
-        read input open change process status get owner group permission mode}}
+    {0 {access creat write rmdir read open mkdir chdir fork fstat chown chmod} {}}
+    {1 {access creat write rmdir read open fstat chown chmod} {file}}
+    {2 {access} {file check access}}
+    {3 {creat open mkdir fork} {create}}
+    {4 {creat open} {file create}}
+    {5 {creat mkdir fork} {new create}}
+    {6 {creat} {file new create}}
+    {7 {write open} {file write}}
+    {8 {write} {file write output}}
+    {9 {rmdir mkdir chdir} {directory}}
+    {10 {rmdir} {file remove directory}}
+    {11 {read open} {file read}}
+    {12 {read} {file read input}}
+    {13 {open} {file create write read open}}
+    {14 {mkdir} {new create directory}}
+    {15 {chdir chown chmod} {change}}
+    {16 {chdir} {directory change}}
+    {17 {fork} {new create process}}
+    {18 {fstat} {file status get}}
+    {19 {chown chmod} {file change}}
+    {20 {chown} {file change owner group}}
+    {21 {chmod} {file change permission mode}}
+    {22 {} {file check access new create write output remove directory
+            read input open change process status get owner group permission mode}}
 
-== Compilation
+## Compilation
 
-This software comes with a configure script that tries to make sure you
-have all necessary tools. Try running:
-
-    ./configure
+Take a look at the `Makefile`. You might want to change `PREFIX` but for a
+first try there is no need to change anything. The build process assumes a
+Unix system and an OCaml installation. It does not depend on libraries
+outside of the OCaml standard libraries
+    
     make
     make install
 
-== User Manual
+## User Manual
 
 There is a Unix man page in doc/ (after compilation). You can format it
 using nroff:
 
     nroff -man doc/colibri.1 | less
 
-== Development Documentation
+## Development Documentation
 
 This software is implemented as a literate program - the source code are
 the *.nw (NoWeb) files that contain LaTeX documentation and OCaml source
 code. For compilation source code is automatically extracted.
 
-== Download
+##  Download
 
-Source code is available only from a Subversion repository
+Source code is available from GitHub
 
     svn co svn://svn.vistabella.de/colibri
 
-== Author 
+## Author 
 
 Christian Lindig
-lindig@cs.uni-sb.de
-http://www.st.cs.uni-sb.de/~lindig/
+lindig@gmail.com
 
 
