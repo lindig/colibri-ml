@@ -1,0 +1,229 @@
+\section{Context}
+
+This module provides an applicative abstraction for binary relations.
+Such a relation is called a \emph{context} in the domain of concept
+analysis.  A module representing a context is created from a functor
+[[Make (x) (Y)]] that takes the domains of the relation as arguments. 
+
+
+<<interfaces>>=
+module type Domain = sig
+    type t
+    val to_string: t -> string
+end
+
+<<Make interface>>=
+module Make (X: Domain) (Y: Domain): S 
+    with type x = X.t
+    with type y = Y.t
+@
+
+Use [[make xs ys]] to create a relation over two domains; the arguments
+[[xs]] and [[ys]] enumerate all potential elements of the two domains.
+But beware: a newly created relation (of tye [[t]] is empty! The actual
+contents of a domain can be observed using [[dump]].
+
+Important operations rely on [[Bitset.t]] to represent sets of elements
+from either domain. For example, [[domain]] and [[domain']] return the
+set of all possible elements of the two domains. Likewise, [[empty]] and
+[[empty']] return empty sets.
+
+To populate a [[t]] context, use [[relate]] and [[unrelate]]. To test
+whether $x$ and $y$ are related, use [[related]].  Function
+[[complement]] inverts a relation $R$: $R' = \{(x,y) \mid (x,y) \notin
+R\}$ where $R' = \mathit{complement}(R)$. 
+
+Functions [[common]] and [[common']] are fundamental for the
+implementaion of concept analysis:
+
+$$\mathit{common}(R,xs) = 
+    \{ y \mid (x,y) \in R~\hbox{for all}~x \in xs \}$$
+
+Intuitively, [[common t xs]] returns the set of $y$ that are related
+with every $x \in [[xs]]$. Likewise, [[common' ys]] returns the set of all
+$x$ that are related with every $y$ in [[ys]].
+
+Idea: implement a function [[size: t -> int]] that reports the number of
+elements in a relation.
+
+<<interfaces>>=
+module type S = sig
+    type t
+    type x
+    type y
+    type 'a set =   'a Bitset.t
+
+    val x_to_string: x -> string
+    val y_to_string: y -> string
+    
+    val make:       x list -> y list -> t
+    val dump:       t -> (x * y) list
+
+    val size:       t -> int    (* number of pair in relation *)
+    
+    val domain:     t -> x set
+    val domain':    t -> y set
+    val empty:      t -> x set
+    val empty':     t -> y set
+
+    val relate:     t -> x -> y -> t
+    val unrelate:   t -> x -> y -> t
+    val related:    t -> x -> y -> bool
+
+    val complement: t -> t
+    
+    val common:     t -> x set -> y set
+    val common':    t -> y set -> x set
+end 
+
+
+<<context.mli>>=
+<<interfaces>>
+<<Make interface>>
+@
+
+% ------------------------------------------------------------------ 
+\subsection{Implementation}
+% ------------------------------------------------------------------ 
+
+<<context.ml>>=
+<<interfaces>>
+
+module Make (X: Domain) (Y:Domain) = struct
+    <<Make>>
+end
+
+module Test = struct
+    <<Test>>
+end
+
+<<Make>>=
+module B = Bitset
+
+type x      = X.t
+type y      = Y.t
+type 'a set = 'a B.t
+
+type t =
+    { domain:       x set
+    ; codomain:     y set
+    ; x_related:    y set array
+    ; y_related:    x set array
+    }
+
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+let (@@) f x  = f x
+
+let x_to_string = X.to_string
+let y_to_string = Y.to_string
+
+let make xs ys =
+    let xset    = B.make xs in
+    let yset    = B.make ys in
+    let xsize   = B.size xset in
+    let ysize   = B.size yset in
+        { domain    = B.fill xset
+        ; codomain  = B.fill yset
+        ; x_related = Array.init xsize (fun _ -> B.empty yset)
+        ; y_related = Array.init ysize (fun _ -> B.empty xset)
+        }
+
+let copy rel =
+    { domain    = rel.domain
+    ; codomain  = rel.codomain
+    ; x_related = Array.copy rel.x_related
+    ; y_related = Array.copy rel.y_related
+    }
+    
+let clone rel f = let rel = copy rel in (f rel; rel)
+
+let domain   rel = rel.domain
+let domain'  rel = rel.codomain
+let empty    rel = B.empty rel.domain
+let empty'   rel = B.empty rel.codomain
+
+let ix rel x = B.index rel.domain x 
+let iy rel y = B.index rel.codomain y 
+
+let related  rel x y = B.ismember y rel.x_related.(ix rel x) 
+let related' rel x y = B.ismember x rel.y_related.(iy rel y)
+
+let foldi f acc array =
+    let rec loop i acc = 
+        if i >= Array.length array then acc else loop (i+1) (f i array.(i) acc)
+    in
+        loop 0 acc
+        
+let dump rel =
+    let add i yset pairs = 
+        pairs @ List.map (fun y -> B.member rel.domain i, B.member yset y)  
+                  (B.members yset)
+    in
+        foldi add [] rel.x_related  
+
+let size rel =
+    Array.fold_left (fun sum set -> sum + B.count set) 0 rel.x_related     
+
+let relate rel x y =
+    let rel = copy rel in
+    let ys  = B.add y rel.x_related.(ix rel x) in
+    let xs  = B.add x rel.y_related.(iy rel y) in
+        ( rel.x_related.(ix rel x) <- ys
+        ; rel.y_related.(iy rel y) <- xs
+        ; assert (related' rel x y)
+        ; rel
+        )
+let unrelate rel x y =
+    let rel = copy rel in
+    let ys  = B.remove y rel.x_related.(ix rel x) in
+    let xs  = B.remove x rel.y_related.(iy rel y) in
+        ( rel.x_related.(ix rel x) <- ys
+        ; rel.y_related.(iy rel y) <- xs
+        ; rel
+        )
+
+let complement rel  = error "not yet implemented"
+
+      
+let dump rel =
+    let add i yset pairs = 
+        pairs @ List.map (fun y -> B.member rel.domain i, B.member yset y)  
+                  (B.members yset)
+    in
+        foldi add [] rel.x_related  
+
+let common  rel xset = 
+    let sets = B.fold xset (fun _ i sets -> rel.x_related.(i) :: sets) [] in
+        B.intersects (domain' rel) sets
+
+let common' rel yset =
+    let sets = B.fold yset (fun _ i sets -> rel.y_related.(i) :: sets) [] in
+        B.intersects (domain rel) sets
+@
+
+% ------------------------------------------------------------------ 
+\subsection{Some code for manual testing}
+% ------------------------------------------------------------------ 
+
+<<Test>>=
+module S = struct
+
+    type t = string
+    let to_string x = x
+end
+module C = Make(S) (S)
+
+let objs  = ["o1";"o2";"o3";"o4";"o5";"o6"]
+let attrs = ["a10";"a12";"a14";"a15";"a16";"a17";"a18";"a2";"a20";"a21"
+            ;"a22";"a24";"a25";"a26";"a27";"a3";"a30";"a33";"a34";"a35"
+            ;"a36";"a37";"a38";"a4";"a42";"a43";"a44";"a46";"a47";"a48"
+            ;"a5";"a6";"a7";"a8";"a9";"a49";"a50"]
+           
+let relation = []
+
+let context =
+    List.fold_left (fun c (o,a) -> C.relate c o a) 
+        (C.make objs attrs) relation
+@
+

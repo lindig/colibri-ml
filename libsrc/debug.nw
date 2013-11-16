@@ -1,0 +1,19 @@
+
+\section{Debugging Utilities}
+
+<<debug.mli>>=
+val on: bool -> unit
+val progress: char -> 'a -> 'a
+@
+
+\subsection{Implementation}
+
+<<debug.ml>>=
+let debug = ref false
+
+let on b = debug := b
+let progress c x =
+    ( if !debug then (prerr_char c; flush stderr)
+    ; x
+    )
+@    

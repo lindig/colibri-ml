@@ -1,0 +1,186 @@
+
+=head1 NAME
+
+colibri -- formal concept analysis tool
+
+=head1 SYNOPSIS
+
+B<colibri> [I<options>] I<command> [I<arguments>] [I<file>]
+
+=head1 DESCRIPTION
+
+B<Colibri> computes the formal concepts of a binary relation read from
+I<file>, or from standard input if no I<file> is provided. A binary
+relation relates objects with features. For example, one could assign
+features like I<red>, I<abstract>, I<landscape> to a photo. Given a
+collection of photos tagged with such features, B<colibri> can mine
+rules from the collection of photos.
+
+=head1 GENERAL OPTIONS
+
+=over 4
+
+=item B<-debug>
+
+Enable debugging. This is only used for development; debugging output
+goes to standard error.
+
+=back
+
+=head1 COMMANDS
+
+=over 4
+
+=item B<size> 
+
+Computes the number of objects, features,, and concepts for I<file> and
+emits the result to stdout. 
+
+=item B<dot>  
+
+Computes the concept lattice for the binary relation in I<file> and
+emits the lattice in Dot(1) format to stdout.
+
+=item B<rules> [I<arguments>]
+
+Compute rules and emit them to stdout. A rule is a set of features that
+are common to many objects.  For a rule to be considered it must at at
+least I<support> many instances and contain at least I<rhs> many
+features. These two numbers are controlled by I<arguments>:
+
+=over 4
+
+=item B<-supp> 30
+
+Minimum support for a rule to be considered; default: 30.
+
+=item B<-rhs> 2
+
+Minimum number of features (or tags) that are part of a rule.
+
+=back
+
+
+=item B<flaws> [I<arguments>] 
+
+Compute rules and rule breakers. For a rule to be considered it must
+have enough objects supporting it and not too many exceptions. This is
+captured by I<arguments> for support and confidence. Support [1,...]
+is the minimum number of objects that support a rule; confidence [0,1]
+controls the acceptable number of exceptions. In addition, the number
+of features in a rule and a rule breaker must not exceed a limit. All
+three parameters are controlled by I<arguments>:
+
+=over 4
+
+=item B<-supp> 30
+
+Minimum support for a rule to be considered; default: 30.
+
+=item B<-conf> 0.9
+
+Minimum confidence for a rule to be considered; default 0.9.
+
+=item B<-diff> 2
+
+Maximum difference in number of features between a rule and a rule
+breaker; default 2.
+
+=back
+
+Rules are omitted to stdout in the following format:
+
+    rule foo.cli (support 3, confidence 0.60)
+      rhs        : a21 a12
+      flaws (  2): o8 o4
+      attrs (  1): a21
+
+The rule states that features C<a21> and C<a12> appear together (in 3
+rules in file C<foo.cli>). There are two rule breakers C<o8> and C<o4>
+that have only feature C<a21> and the other one missing.
+
+
+=item B<help>
+
+Emits minimal help to standard output.
+
+=item B<version>
+
+Reports the program version to standard output.
+
+=back
+
+=head1 INPUT FORMAT
+
+The input relates objects with features. The format is as follows:
+
+    # sample input file for colibri; try:
+    # colibri -dot example.bri
+
+    chmod:		change file mode permission ;
+    chown:		change file group owner;
+    fstat:		get file status ;
+
+Objects and features are delimited by a colon. features are
+delimited by space and end with a semi colon. An object may have an
+empty list of features. 
+
+A comment starts with C<#>, C<-->, or C<%> and reaches to the end of the
+line.
+
+=head1 AUTHOR
+
+Please send feedback, bug reports, and experience reports to the author:
+Christian Lindig <lindig@cs.uni-sb.de>
+L<http://www.st.cs.uni-sb.de/~lindig/>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2006 Christian Lindig <lindig@eecs.harvard.edu>. All
+rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+=over
+
+=item 1. 
+
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+=item 2. 
+
+Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following
+disclaimer in the documentation and/or other materials provided
+with the distribution.
+
+=back
+
+THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR AND COPYRIGHT HOLDER BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+=head1 VERSION
+
+ $Id: colibri.pod 66 2006-11-27 13:26:34Z lindig $
+
+=head1 SEE ALSO 
+
+dot(1)
+
+L<http://www.st.cs.uni-sb.de/~lindig/>
+
+
+

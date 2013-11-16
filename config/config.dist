@@ -1,0 +1,18 @@
+# required tools and settings
+BINEXT               := opt
+DATE                 := 20060413
+LIBEXT               := cma
+NOTANGLE             := notangle
+OCAML_VERSION        := 3.09
+OCAMLC               := ocamlc
+OCAMLDEP             := ocamldep
+OCAMLLEX             := ocamllex
+OCAMLYACC            := ocamlyacc
+POD2MAN              := pod2man
+POD2TEXT             := pod2text
+PREFIX               := /usr/local
+NAME                 := colibri
+# optional tools and settings
+LATEX                := pdflatex
+NOWEAVE              := noweave
+OCAMLOPT             := ocamlopt.opt

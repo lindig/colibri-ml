@@ -1,0 +1,302 @@
+
+% ------------------------------------------------------------------ 
+\section{Fast Concept Analysis}
+% ------------------------------------------------------------------ 
+
+\begingroup
+\def\X{{\mathcal X}}
+\def\Y{{\mathcal Y}}
+\def\R{{\mathcal R}}
+
+This module implements Formal Concept Analysis. Every binary relation $\R
+\subseteq \X \times \Y$ induces a set of so-called concepts. A concept is
+a pair $(X,Y)$ of two sets $X \subseteq \X$ and $Y \subseteq \Y$ where
+the following holds:
+\begin{eqnarray*}
+    X = \{ x \in \X \mid (x,y)~\hbox{for all}~ y \in Y \}\\
+    Y = \{ y \in \Y \mid (x,y)~\hbox{for all}~ x \in X \}\\
+\end{eqnarray*}
+Intuitively, a concept corresponds to a maximal rectangle in the cross
+table that represents the binary relation $\R$. The concepts of a
+relation form a complete lattice. Except for the top and bottom concept,
+every lattice has a set of super and sub lattices. Any two concepts have
+a unique least upper bound and a maximum lower bound (each of which are
+concepts).
+
+For the details of concept analysis, refer to the textbook \textit{Formal
+Concept Analysis: Mathematical Foundations} by  Bernhard Ganter, Rudolf
+Wille, C. Franzke Springer, 1998.  The algorithm implemented here is
+from Christian Lindig: \textit{Fast Concept  Analysis}; in Gerhard
+Stumme, editors,  Working with Conceptual Structures -  Contributions to
+ICCS 2000, Shaker  Verlag, Aachen, Germany, 2000. It is available in the
+[[doc/]] directory.
+
+The [[Make]] functor takes as argument the representation of contexts
+that we use. A context is a binary relation [[rel]] over two types of
+elements [[x]] and [[y]]. These are shared between [[Make]] and
+[[Context]].
+
+<<fca.mli>>=
+<<interfaces>>
+module Make (C: Context.S): S
+    with type x     = C.x
+    with type y     = C.y
+    with type rel   = C.t
+@
+
+<<interfaces>>=
+module type S = sig
+    type x
+    type y
+    type rel 
+    type 'a set     = 'a Bitset.t
+    type concept    = x set * y set
+
+    module Set:     Set.S with type elt = concept
+    module Map:     Map.S with type key = concept
+
+    <<operations>>
+end
+@
+
+\paragraph{Operations} A natural order over concepts is partial: we
+define [[lt]] (less than) and [[gt]] (greater than) to denote sub and
+super concept relations. In addition, we have a total order defined by
+[[compare]].
+
+<<operations>>=
+val compare:    concept -> concept -> int (*-1 / 0 / 1*)
+val lt:         concept -> concept -> bool
+val gt:         concept -> concept -> bool
+@
+
+Every context has two distinguished concepts: [[top]] and [[bottom]]. 
+
+<<operations>>=
+val bottom:     rel -> concept
+val top:        rel -> concept
+@
+
+A concept is a pair of two sets. These may be observed either directly
+or using [[objs]] and [[attrs]]. Rather than using non-descript names
+like [[x]] and [[y]], a context (or relation) is thought to relate
+objects with attributes and hence the two sets comprising a concept are
+sets of objects and attributes, respectively.
+
+<<operations>>=
+val objs:       concept -> x set
+val attrs:      concept -> y set
+@
+
+The concepts induced by a relation [[rel]] may be observed: [[size]]
+returns the number of concepts in a relation, [[concepts]] returns them
+in a set. Beware: a context may induce exponentially many concepts which
+makes these operations expensive.
+
+<<operations>>=
+val size:       rel -> int
+val concepts:   rel -> Set.t
+@
+
+The upper and lower neighbors of a given concept are returned by
+[[upper]] and [[lower]], respectively. These results are computed on
+demand and therefore it is safe to call them even for large contexts.
+The more general [[fold_upper]] and [[[fold_lower]] functions provide a
+fold over the upper and lower neighbors of a concept.
+
+<<operations>>=
+val upper:      rel -> concept -> concept list 
+val lower:      rel -> concept -> concept list
+
+val fold_upper: rel -> (concept -> 'a -> 'a) -> concept -> 'a -> 'a
+val fold_lower: rel -> (concept -> 'a -> 'a) -> concept -> 'a -> 'a
+@
+
+Function [[fold_concepts rel f]] provides a fold over all concepts of a
+relation. Function [[f]] is called with each concept and a list of all
+its upper neighbors. Function [[fold_concepts']] is the dual where [[f]]
+receives a concept and the list of its lower neighbors.
+
+Clarify: do these functions iterate over all edges or over all nodes? In
+the latter case no node should be visited twice.
+
+<<operations>>=
+val fold_concepts : rel -> (concept -> concept list -> 'a -> 'a) -> 'a -> 'a 
+val fold_concepts': rel -> (concept -> concept list -> 'a -> 'a) -> 'a -> 'a 
+@
+
+Function [[fold_concepts_topdown rel p]] works like [[fold_concepts]],
+i.e., traverses the concept lattice breadth-first, starting with the top
+concept. In addition, the traversal may be pruned using predicate [[p]].
+Given a concept, only lower neighbors for which [[p]] holds are
+considered for further traversal. (The dual [[fold_concepts_bottom_up]]
+is not yet implemented.)
+
+<<operations>>=
+val fold_concepts_topdown: rel -> (concept -> bool) 
+                         -> (concept -> concept list -> 'a -> 'a) 
+                         -> 'a -> 'a 
+(* missing: meet and join operations *)
+@
+
+% ------------------------------------------------------------------ 
+\subsection{Implementation}
+% ------------------------------------------------------------------ 
+
+<<fca.ml>>=
+module B = Bitset
+module D = Debug
+let ( -- ) = B.minus     
+let ( ** ) = B.intersect
+
+let (@@) f x = f x
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+
+<<interfaces>>
+module Make (C: Context.S) = struct
+    <<Make>>
+end
+@
+
+<<Make>>=
+type x          = C.x
+type y          = C.y    
+type rel        = C.t
+type 'a set     = 'a Bitset.t
+type concept    = x set * y set
+
+let compare (o1,_) (o2,_) = B.compare o1 o2
+let lt      (o1,_) (o2,_) = B.subset  o1 o2
+let gt      (o1,_) (o2,_) = B.subset  o2 o1
+
+module Concept = struct
+    type t      = concept
+    let compare = compare
+    let to_string (objs,attrs) =
+        let o = String.concat " " 
+                @@ List.map C.x_to_string @@ B.members' objs in
+        let a = String.concat " " 
+                @@ List.map C.y_to_string @@ B.members' attrs in
+          Printf.sprintf "(%s,%s)" o a        
+end
+
+let xset_to_string set = 
+        String.concat " " @@ List.map C.x_to_string @@ B.members' set 
+
+let yset_to_string set =
+        String.concat " " @@ List.map C.y_to_string @@ B.members' set 
+
+let is_concept rel (xset,yset) =
+    B.equal (C.common rel xset) yset && B.equal (C.common' rel yset) xset 
+
+let closure rel xset = 
+    let yset' = C.common  rel xset  in
+    let xset' = C.common' rel yset' in
+        assert (is_concept rel (xset', yset'));
+        (xset',yset')
+
+let closure' rel yset = 
+    let xset = C.common' rel yset in
+    let yset = C.common  rel xset in
+        assert (is_concept rel (xset, yset));
+        (xset, yset)
+
+let bottom rel  = closure  rel @@ B.empty @@ C.domain  rel
+let top    rel  = closure' rel @@ B.empty @@ C.domain' rel
+
+let objs        = fst
+let attrs       = snd
+
+let fold_upper rel f (objs,attrs) acc =
+    let min    = C.domain rel -- objs   in
+    let test set i (min,acc) =
+        let o                   = B.member set i              in
+        let (objs',attrs') as c = closure rel (B.add o objs)  in
+            if B.isempty (min ** (B.remove o (objs' -- objs)))   
+            then (min,f c acc)
+            else (B.remove o min, acc)
+    in
+        snd @@ B.fold (C.domain rel -- objs) test (min,acc)
+
+let fold_lower rel f (objs,attrs) acc =
+    let min    = C.domain' rel -- attrs   in
+    let test set i (min,acc) =
+        let a                   = B.member set i                in
+        let (objs',attrs') as c = closure' rel (B.add a attrs)  in
+            if B.isempty (min ** (B.remove a (attrs' -- attrs)))   
+            then (min,f c acc)
+            else (B.remove a min, acc)
+    in
+        snd @@ B.fold (C.domain' rel -- attrs) test (min,acc)
+
+let upper rel concept = fold_upper rel (fun c cs -> c::cs) concept []
+let lower rel concept = fold_lower rel (fun c cs -> c::cs) concept []
+
+module Set  = Set.Make(Concept) (* concept set *)
+module Map  = Map.Make(Concept)
+
+let choose  set = try Some (Set.min_elt set) with Not_found -> None 
+let choose' set = try Some (Set.max_elt set) with Not_found -> None 
+
+let concepts rel =
+    let rec loop visited todo = match choose todo with
+        | Some c when Set.mem c visited ->
+                loop visited (Set.remove c todo)
+        | Some c ->
+                let todo = fold_lower rel Set.add c todo in
+                    loop (D.progress '+' @@ Set.add c visited) 
+                         (Set.remove c todo)
+        | None -> visited
+    in
+        loop Set.empty (Set.singleton @@ top rel)
+
+let fold_concepts rel f acc =
+    let (++) set xs = List.fold_right Set.add xs set in 
+    let rec loop visited todo acc = match choose todo with
+        | Some c when Set.mem c visited ->
+                loop visited (Set.remove c todo) acc
+        | Some c ->
+                let up   = upper rel c   in
+                let acc  = f c up acc    in
+                let todo = todo ++ up    in
+                    loop (D.progress 'f' @@ Set.add c visited) 
+                         (Set.remove c todo) acc
+        | None -> acc
+    in
+        loop Set.empty (Set.singleton @@ bottom rel) acc
+
+let fold_concepts' rel f acc =
+    let (++) set xs = List.fold_right Set.add xs set in 
+    let rec loop visited todo acc = match choose' todo with
+        | Some c when Set.mem c visited ->
+                loop visited (Set.remove c todo) acc
+        | Some c ->
+                let down = lower rel c   in
+                let acc  = f c down acc  in
+                let todo = todo ++ down  in
+                    loop (D.progress 'f' @@ Set.add c visited) 
+                         (Set.remove c todo) acc
+        | None -> acc
+    in
+        loop Set.empty (Set.singleton @@ top rel) acc
+
+let fold_concepts_topdown rel p f acc =
+    let (++) set xs = List.fold_right Set.add (List.filter p xs) set in 
+    let rec loop visited todo acc = match choose' todo with
+        | Some c when Set.mem c visited ->
+                loop visited (Set.remove c todo) acc
+        | Some c ->
+                let down = lower rel c   in
+                let acc  = f c down acc  in
+                let todo = todo ++ down  in
+                    loop (D.progress 'F' @@ Set.add c visited) 
+                         (Set.remove c todo) acc
+        | None -> acc
+    in
+        loop Set.empty (Set.singleton @@ top rel) acc
+
+
+let size rel = Set.cardinal @@ concepts rel
+@
+\endgroup

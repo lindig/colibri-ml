@@ -1,0 +1,371 @@
+
+\section{Bit Vectors}
+\def\<#1>{\texttt{#1}}
+
+This module provides mutable bitvectors with set operations. A bitvector
+of size $n$ can be used to represent sets of integers from zero to
+$n-1$; an element of a bitvector is called a [[bit]] and therefore a
+vector may hold bit 0 to bit $n-1$.  Unlike sets provided by the OCaml
+module [[Set]], the size $n$ of a bitvector must be provided upon
+creating a set and cannot be changed later. 
+
+Bits are identified by integers; we define a type synonym [[bit]] to
+emphasis that not every [[int]] is a valid [[bit]].
+
+<<bitvec.mli>>=
+type t
+type bit = int  (* 0 .. size-1 *)
+@
+
+A vector is created by [[make]], which takes the size as an argument.
+Initially, a bitvector is empty.  A vector's size is observed with
+function [[size]]. Since vectors are mutable, [[copy]] is required to
+create a fresh copy of a vector.
+
+<<bitvec.mli>>=
+val make:       int -> t        (* create with size *)
+val size:       t -> int        (* observe size; size(make n) = n *)
+val copy:       t -> t          (* make identical copy *)
+val isempty:    t -> bool
+@
+
+While [[size]] return the maximum number of bits a vector may hold,
+[[count]] returns the number of bits actually in a vector. All bits
+are removed by [[clear]], and all bits are put into a vector with
+[[fill]]. The bits in a vector may be observed with [[members]], which
+returns them in an ordered list. (Do we need a \<fold> function for
+really large vectors?)
+
+<<bitvec.mli>>=
+val count:      t -> int        (* count bits in vector *)
+val clear:      t -> unit       (* count(clear x) = 0      *)
+val fill:       t -> unit       (* count(fill x)  = size x *)
+val members:    t -> int list   (* all bits in the set, ordered *)
+val fold:       t -> (bit -> 'a -> 'a) -> 'a  -> 'a
+@
+
+
+\paragraph{Element Operations} Individual bits may be added or removed
+with [[put]]. A bit is added when the third argument is [[true]] and
+removed otherwise. Function [[get]] observes the presence of a bit. It
+is a checked runtime error to get or put bits outside $[0, \dots, n-1]$
+where $n$ is the vector's size.
+
+<<bitvec.mli>>=
+val get:    t -> bit -> bool
+val put:    t -> bit -> bool -> unit
+@
+
+\paragraph{Order} Function [[compare]] defines a total order on vecotors
+of the same size. It is a checked runtime error to compare vectors of
+different sizes. 
+
+<<bitvec.mli>>=
+val compare: t -> t -> int      (* -1, 0, 1 *)
+@
+
+The functions [[lt]], [[le]] and [[eq]] implement set comparison:
+$\<lt>~x~y$ holds if and only if $x$ is a proper subset of $y$, that is
+$x \subset y$. Similarly, [[le]] implements $\subseteq$, and [[eq]]
+implements set equality.
+
+<<bitvec.mli>>=
+val lt:     t -> t -> bool
+val le:     t -> t -> bool
+val eq:     t -> t -> bool
+@
+
+\paragraph{Set Operations} The following set operations return the
+resutl in the first argument by destructive update. All operations are
+only defined on vectors of the same size and it's a checked runtime
+error to apply these functions to vectors of different sizes.
+
+The operations below implement set union ($x \cup y$), set intersection
+($x \cap y$), set difference ($x \setminus y$), and symmetric
+difference. The symmetric difference contains all bits that belong to
+one but not to both vectors.
+
+<<bitvec.mli>>=
+val union:  t -> t -> unit
+val inter:  t -> t -> unit
+val minus:  t -> t -> unit
+val diff:   t -> t -> unit
+@
+
+Since bitvectors are finite, we can offer the complement of a set. 
+<<bitvec.mli>>=
+val complement:  t -> unit
+@
+
+\paragraph{Miscellaneous Functions} Intended for debugging, [[to_string]]
+returns a string-representation of a vector.
+
+<<bitvec.mli>>=
+val to_string: t -> string
+@
+
+\subsection{Implementation}
+
+A bitvector [[t]] is represented as an array of integers; an integer can
+typically hold 31~bits on a 3-bit architecture and 63~bits on a 64-bit
+architecture. This [[wordsize]] is determined automatically such that
+the implementation is portable.
+
+Bit $i$ is represented by bit $i \bmod \<wordsize>$ in integer
+$\<words>[i/\<wordsize>]$.  In the general case, this leaves some bits
+in the most significant word unused. These have to be set zero! The
+[[isvalid]] predicate can be used to check this condition.
+
+<<bitvec.ml>>=
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+
+type bit  = int
+type word = int
+type t =
+    { size:     int
+    ; words:    word array
+    }
+
+let (@@) f x = f x
+let (<<) = (lsl)    (* shift left  *)
+let (>>) = (lsr)    (* shift right *)
+
+let wordsize =
+  let rec probe size =
+    if 1 << size = 0 then size else probe (size + 1)
+  in
+    probe 1
+
+let zeros = 0
+let ones  = lnot zeros
+@
+
+Function [[nwords n]] computes $\lceil n/\<wordsize>\rceil$, the number
+of words necessary to hold $n$ bits. Some bits may go wasted:
+[[msbmask]] computes a mask to mask out unused bit in the highest work.
+The highest word for vector [[t]] has index [[limit t]].
+
+<<bitvec.ml>>=
+let nwords size = (size + wordsize - 1)/wordsize
+let limit t     = nwords t.size - 1
+let limit t     = Array.length t.words - 1
+
+let msbmask size =
+    let bits = size mod wordsize in
+        if bits > 0
+        then lnot (ones << bits)
+        else ones
+
+let isvalid t = 
+    t.size > 0 && t.words.(limit t) land (lnot @@ msbmask t.size) == 0
+
+let make size =
+    assert (size > 0);
+    { size  = size
+    ; words = Array.make (nwords size) 0
+    }
+
+let size t = t.size
+
+let copy t =
+    { size  = t.size
+    ; words = Array.copy t.words
+    }
+
+let clear t = Array.fill t.words 0 (nwords t.size) zeros 
+@
+
+When we fill a vector completely we do it word by word and later fix the
+highest word: unused bits must be zero.
+
+<<bitvec.ml>>=
+let fill t = 
+    ( Array.fill t.words 0 (nwords t.size) ones
+    ; t.words.(limit t) <- t.words.(limit t) land msbmask t.size 
+    ; assert (isvalid t)
+    )
+@
+
+To implement [[count]], we rely on [[count_bits]], which counts the bits
+in an integer by shifting. A smarter approach is to use a table to look
+up the bits set in a nibble and do it nibble by nibble.
+
+<<bitvec.ml>>=
+let rec count_bits = function
+    | 0                         -> 0
+    | word when word land 1 = 1 -> 1 + count_bits (word lsr 1)
+    | word                      ->     count_bits (word lsr 1)
+
+let count t = Array.fold_left (fun n word -> n + count_bits word) 0 t.words
+@
+
+<<bitvec.ml>>=
+let members t =
+    let rec loop bit = function
+        | 0                             -> []
+        | word when word land 1 = 1     -> bit :: loop (bit+1) (word >> 1)
+        | word                          ->        loop (bit+1) (word >> 1) in
+    let accumulate (bit,members) word =
+        (bit + wordsize, members @ loop bit word) 
+    in
+        snd @@ Array.fold_left accumulate (0,[]) t.words
+        
+let to_string t = String.concat " " @@ List.map string_of_int @@ members t
+@
+
+Functions [[get]] and [[put]] need to find the bit and word for a given
+bit $i$; it's bit $i \bmod \<wordsize>$ in word $i/\<wordsize>$. Setting,
+clearing, and querying a bit is done with bitmasks.
+
+<<bitvec.ml>>=
+let get t bit =
+    assert (0 <= bit && bit < t.size);
+    (t.words.(bit/wordsize) >> (bit mod wordsize)) land 1 = 1 
+
+let put t bit bool =
+    assert (0 <= bit && bit < t.size);
+    t.words.(bit/wordsize) <- 
+        ( match bool with 
+        | true  -> t.words.(bit/wordsize) lor        (1 << (bit mod wordsize))  
+        | false -> t.words.(bit/wordsize) land (lnot (1 << (bit mod wordsize)))
+        )
+    ; assert (get t bit = bool)
+@
+
+Function [[compare]] defines a total order. We implement it by treating
+a bit vector as a (long) unsigned integer and comparing words, starting
+with the most significant word down to word zero. Since OCaml's integer
+are signed and we like to use OCaml's order on integers, we need a function
+[[cmp]] that compares signed integers as if they were unsigned. The
+implementation of [[compare]] starts comparing the highest words. It
+stops, when it finds two words not equal, or after all words are
+compared equal, which means the vectors are equal.
+
+<<bitvec.ml>>=
+let cmp x y = (* x=y: 0, x<y:-1, x>y:1 *)
+    if x = y then 0 else match x >= 0, y >= 0 with
+    | true , true  -> if x > y then 1 else -1
+    | false, false -> if x > y then 1 else -1
+    | true , false -> -1
+    | false, true  -> 1
+    
+let compare x y =
+    assert (x.size = y.size);
+    assert (isvalid x);
+    assert (isvalid y);
+    let rec loop i =
+        if i < 0 
+        then 0 
+        else ( match cmp x.words.(i) y.words.(i) with
+             | 0 -> loop (i-1)
+             | c -> c
+             )
+    in
+        loop (limit x)
+@
+
+The set operations update the first argument: $x \gets x \oplus y$. We
+can compute the effect word by word and use a general [[update]]
+function, which receives two vectors and an operation $\oplus$. The
+individual operations are defined in terms of bit operations; no
+operation sets the unused bits in the highest word. 
+
+
+<<nice but expensive code>>=
+let update f x y =
+    assert (x.size = y.size);
+    assert (isvalid x);
+    assert (isvalid y);
+    for i = 0 to limit x do
+        x.words.(i) <- f x.words.(i) y.words.(i)
+    done
+
+let union = update (lor)
+let inter = update (land)
+let minus = update (fun x y -> x land (lnot y))
+let diff  = update (lxor)
+@
+
+This is heavily used code and profiling showed that passing the central
+operation $\oplus$ as an argument is costly. We thus expand the code for better
+performance. This gives the compiler the chance to express these
+low-level operations directly.
+
+<<bitvec.ml>>=
+let inter x y =
+    for i = 0 to limit x do
+        x.words.(i) <-  x.words.(i) land y.words.(i)
+    done
+
+let minus x y =
+    for i = 0 to limit x do
+        x.words.(i) <-  x.words.(i) land (lnot (y.words.(i)))
+    done
+
+let union x y =
+    for i = 0 to limit x do
+        x.words.(i) <-  x.words.(i) lor y.words.(i)
+    done
+
+let diff x y =
+    for i = 0 to limit x do
+        x.words.(i) <-  x.words.(i) lxor y.words.(i)
+    done
+@
+
+For the complement we invert all bits; however, this affects also the
+unused bits in the highest words which must be reset to zero. 
+
+<<bitvec.ml>>=
+let complement t =
+    for i = 0 to limit t do
+        t.words.(i) <- lnot t.words.(i) 
+    done
+    ; t.words.(limit t) <- t.words.(limit t) land msbmask t.size 
+@
+
+Set relations are defined by bit operations that must yield zero for a
+property to hold; for example: $x \subset y$ is equivalent to $x \wedge
+(\lnot y) = 0$.  We use [[fold]] to apply an operator $\oplus$ to two
+words and to check that the result is zero. Otherwise we can stop and
+return [[false]].
+
+<<bitvec.ml>>=
+let whiledo f x y =
+    assert (x.size = y.size);
+    assert (isvalid x);
+    assert (isvalid y);
+    let rec loop cond i =
+        if not cond || i < 0 
+        then cond 
+        else loop (f x.words.(i) y.words.(i)) (i-1)
+    in
+        loop true (limit x)
+            
+let eq     = whiledo (fun x y -> x = y)
+let le     = whiledo (fun x y -> x land (lnot y) = 0)
+let lt x y = le x y && not (eq x y)
+
+let isempty x =
+    let rec allzero iszero i =
+        if not iszero || i < 0 then iszero else allzero (x.words.(i) = 0) (i-1)
+    in 
+        allzero true (limit x) 
+@
+
+\paragraph{Fold}
+
+<<bitvec.ml>>=
+let fold t f acc = 
+  let rec loop i acc = function
+    | 0                         -> acc
+    | word when word land 1 = 1 -> loop (i+1) (f i acc) (word >> 1)
+    | word                      -> loop (i+1)      acc  (word >> 1) in
+  let accumulate (i,acc) word = (i+wordsize, loop i acc word) in
+    snd @@ Array.fold_left accumulate (0,acc) t.words
+
+let members t     = fold t (fun x xs -> x::xs) []
+@ 
+
+

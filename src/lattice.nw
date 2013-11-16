@@ -1,0 +1,117 @@
+
+\section{Concept Lattices}
+
+This module implements high-level function to analyze binary relations.
+
+<<lattice.mli>>=
+exception Error of string
+
+val size:           in_channel -> out_channel -> unit
+val dot:            in_channel -> out_channel -> unit
+@
+
+\begin{itemize}
+\item [[size]] reports the number of concepts for a context read from a
+      file.
+
+\item [[dot]] emits the concept lattice in dot format. This needs more
+      work as the concepts are just numbered but don't have any
+      meaningful data associated with them.
+\end{itemize}
+
+
+\subsection{Implementation}
+
+<<lattice.ml>>=
+module StrSet = Set.Make (String)
+module Str    = struct type t = string let to_string x = x end
+module C      = Context.Make (Str) (Str)
+module D      = Debug
+module F      = Fca.Make (C)
+module B      = Bitset
+module CS     = F.Set
+module CM     = F.Map
+
+type strset   = string Bitset.t
+
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+let (@@) f x  = f x
+
+let table channel = 
+    let lexbuf = Lexing.from_channel channel in
+    try
+        D.progress 't' @@ Parser.context Scanner.token lexbuf
+    with
+        Parsing.Parse_error -> 
+            error "parse error at offset %d" (Lexing.lexeme_start lexbuf)
+
+let domains table = 
+    let line (objs,attrs) (o,aa) = 
+        let objs  = StrSet.add o objs                   in 
+        let attrs = List.fold_right StrSet.add aa attrs in
+            (objs,attrs)
+    in
+        D.progress 'd' @@ List.fold_left line (StrSet.empty,StrSet.empty) table 
+
+let relation table =
+    let objs, attrs = domains table in
+    let rel         = C.make (StrSet.elements objs) (StrSet.elements attrs) in
+    let line rel (o,aa) = 
+        List.fold_left (fun rel a -> C.relate rel o a) rel aa
+    in
+        D.progress 'r' @@ List.fold_left line rel table
+
+let size ic oc = 
+    let i2f      = float_of_int            in
+    let rel      = relation @@ table @@ ic in
+    let objs     = B.size @@ C.domain rel  in
+    let attrs    = B.size @@ C.domain' rel in
+    let pairs    = C.size rel              in
+    let size     = F.size rel              in    
+    let density  = i2f pairs /. (i2f objs *. i2f attrs) in 
+        ( Printf.fprintf oc "number of objects:    %d\n" objs
+        ; Printf.fprintf oc "number of attributes: %d\n" attrs
+        ; Printf.fprintf oc "number of concepts:   %d\n" size
+        ; Printf.fprintf oc "number of pairs:      %d\n" pairs
+        ; Printf.fprintf oc "density:              %5.3f\n" density
+        )
+
+let enumerate concepts =
+    snd @@ CS.fold 
+        (fun c (count,map) -> (count+1,CM.add c count map)) 
+        concepts
+        (0,CM.empty)
+
+let id map concept =
+    try
+        CM.find concept map
+    with
+        Not_found -> error "unknown concept found (this can't happen)"
+
+let size_of_file file = 
+    let ic   = open_in file             in 
+        ( size ic stdout
+        ; close_in ic
+        )
+@
+
+In the code below we are traversing the lattice top-down; the sole
+reason is that we want to execise the code in [[Fca]] for top-down
+traversal, rather than relying always on bottom-up traversal.
+
+<<lattice.ml>>=
+let dot ic oc =
+    let rel     = relation @@ table @@ ic   in
+    let cs      = F.concepts rel            in
+    let map     = enumerate cs              in
+    let lookup  = id map                    in  
+    let edge sub super =
+        Printf.fprintf oc "node%n -> node%n\n" (lookup sub) (lookup super) in
+    let edges' super subs () = List.iter (fun sub -> edge sub super) subs   
+    in
+        ( Printf.fprintf oc "digraph lattice {\n"
+        ; F.fold_concepts' rel edges' ()  
+        ; Printf.fprintf oc "}\n"
+        )
+@

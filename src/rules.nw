@@ -1,0 +1,160 @@
+
+
+\section{Rules}
+
+The module provides code to infer rules from binary relations and
+violations of these rules.
+
+<<rules.mli>>=
+val flaws:          min_support:int -> min_confidence:float -> max_diff:int 
+                    -> string -> in_channel -> out_channel -> unit
+
+val rules:          min_support:int -> min_rhs:int  -> string 
+                    -> in_channel -> out_channel -> unit
+
+val indep_rules:    min_support:int -> max_confidence:float -> min_width:int 
+                    -> string -> in_channel -> out_channel -> unit
+
+
+@
+
+<<rules.ml>>=
+module StrSet = Set.Make (String)
+module Str    = struct type t = string let to_string x = x end
+module C      = Context.Make (Str) (Str)
+module D      = Debug
+module F      = Fca.Make (C)
+module B      = Bitset
+module CS     = F.Set
+module CM     = F.Map
+
+type strset   = string Bitset.t
+
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+let (@@) f x  = f x
+let fprintf   = Printf.fprintf
+let sprintf   = Printf.sprintf
+let (--)      = B.minus 
+let (//) x y  = float_of_int x /. float_of_int y 
+
+let table channel = 
+    let lexbuf = Lexing.from_channel channel in
+    try
+        D.progress 't' @@ Parser.context Scanner.token lexbuf
+    with
+        Parsing.Parse_error -> 
+            error "parse error at offset %d" (Lexing.lexeme_start lexbuf)
+
+let domains table = 
+    let line (objs,attrs) (o,aa) = 
+        let objs  = StrSet.add o objs                   in 
+        let attrs = List.fold_right StrSet.add aa attrs in
+            (objs,attrs)
+    in
+        D.progress 'd' @@ List.fold_left line (StrSet.empty,StrSet.empty) table 
+
+let relation table =
+    let objs, attrs = domains table in
+    let rel         = C.make (StrSet.elements objs) (StrSet.elements attrs) in
+    let line rel (o,aa) = 
+        List.fold_left (fun rel a -> C.relate rel o a) rel aa
+    in
+        D.progress 'r' @@ List.fold_left line rel table
+
+type rule =
+    { rhs:          strset
+    ; support:      strset
+    }
+
+type violation =
+    { rule:         rule
+    ; flaw:         rule
+    }
+    
+let set x  = String.concat " " @@ B.members' x 
+let rule r = sprintf "rule (support %3d): %s" (B.count r.support)(set r.rhs)
+
+let violation v =
+    let s           = B.count v.rule.support              in
+    let s'          = B.count v.flaw.support              in
+    let c           = s // s'                             in
+    let flaws       = v.flaw.support -- v.rule.support    in
+    let flaws_count = B.count flaws in 
+    let gapwidth    = B.count (v.rule.rhs -- v.flaw.rhs)  in 
+        String.concat "\n"
+        [ sprintf "violation (confidence %4.2f support %3d gap %3d flaws %3d)" 
+            c s gapwidth flaws_count
+        ; sprintf "  flaws (%3d)       : %s" flaws_count (set flaws)
+        ; sprintf "  %s" (rule v.rule)
+        ; sprintf "  %s" (rule v.flaw)
+        ; ""
+        ]
+
+
+let flaws ~min_support ~min_confidence ~max_diff  info ic oc =
+    let rel  = relation @@ table @@ ic in
+    let filter (o,a) = B.count o >= min_support in 
+    let edge (o,a) (x,y)  = (* super sub *)
+        let support    = B.count x            in
+        let confidence = support // B.count o in
+        if     support    >= min_support 
+            && confidence >= min_confidence 
+            && B.count y - B.count a <= max_diff
+        then
+            output_string oc @@ violation 
+                { rule = { support = x; rhs = y }
+                ; flaw = { support = o; rhs = a }
+                }
+    in
+    let edges super subs () = List.iter (edge super) subs 
+    in
+        ( output_string oc @@  String.concat " " @@ Array.to_list Sys.argv 
+        ; output_string oc "\n"
+        ; F.fold_concepts_topdown rel filter edges ()
+        )
+
+let indep_rules ~min_support ~max_confidence ~min_width info ic oc =
+    let rel  = relation @@ table @@ ic in
+    let filter (o,a) = B.count o >= min_support in 
+    let edge (o,a) (x,y)  = (* super sub *)
+        let support    = B.count x            in
+        let width      = B.count a            in
+        let confidence = support // B.count o in
+        if     support    >= min_support 
+            && confidence <= max_confidence 
+            && width      >= min_width
+        then
+            output_string oc @@ violation 
+                { rule = { support = x; rhs = y }
+                ; flaw = { support = o; rhs = a }
+                }
+    in
+    let edges super subs () = List.iter (edge super) subs 
+    in
+        ( output_string oc @@  String.concat " " @@ Array.to_list Sys.argv 
+        ; output_string oc "\n"
+        ; F.fold_concepts_topdown rel filter edges ()
+        )
+
+
+let rules ~min_support ~min_rhs info ic oc =
+    let rel  = relation @@ table @@ ic in
+    let filter (o,a) = B.count o >= min_support in 
+    let edges (o,a) subs () =
+        let support    = B.count o in
+        let rhs        = B.count a in
+        if support >= min_support && rhs >= min_rhs then
+            output_string oc @@ String.concat "\n"
+                [ rule { support = o; rhs = a} 
+                ; ""
+                ]
+    in
+        ( output_string oc @@  String.concat " " @@ Array.to_list Sys.argv 
+        ; output_string oc "\n"
+        ; F.fold_concepts_topdown rel filter edges ()
+        )
+@
+
+
+

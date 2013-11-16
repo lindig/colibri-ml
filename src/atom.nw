@@ -1,0 +1,24 @@
+
+\section{Atoms}
+
+An atom is a unique string that exists only once. The idea behind atoms
+is to maximuize sharing of strings. 
+
+Caveat: strings in OCaml are mutable and thus updating an atom may have
+unwanted consequences.
+
+<<atom.mli>>=
+type t
+val create: unit -> t
+val atomize: t -> string -> string
+@
+
+\subsection{Implementation}
+
+<<atom.ml>>=
+module H = Hashtbl
+
+type t          = (string,string) H.t
+let create ()   = H.create 1000
+let atomize t x = try H.find t x with Not_found -> (H.add t x x; x)
+@

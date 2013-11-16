@@ -1,0 +1,31 @@
+#! /usr/bin/env ruby
+#
+# Generate a random context - used for testing.
+
+def attrs(n,f)
+    1.upto(n) { |i| 
+        if rand(100) < f then print "a#{i} " end
+    }
+    puts ";"
+end
+
+def table(m,n,f)
+    1.upto(m) { |i|
+        print "o#{i}: "
+        attrs(n,f)
+    }
+end
+
+if $*.length != 3 then
+    $stderr.puts "usage: #{$0} rows columns frequency"
+    $stderr.puts "       #{$0} 100 100 10"
+    $stderr.puts "all numbers are positive integers"
+    exit 1
+end
+
+$objs  = $*[0].to_i
+$attrs = $*[1].to_i
+$freq  = $*[2].to_i
+
+table($objs, $attrs,$freq)
+exit 0

@@ -1,0 +1,188 @@
+\section{Main Module}
+
+Everything starts at the main module: it parses the command line and
+calls functions that do the actual work. Catching and reporting errors
+to the user is also the main modules' responsibility. The Main module
+has an interface but since [[main]] is called automatically it is not of
+much use.
+
+<<main.mli>>=
+val main: unit -> unit (* executed automatically *)
+@
+
+\subsection{Implementation}
+
+<<main.ml>>=
+exception Usage of string
+
+let error   fmt = Printf.kprintf (fun msg -> raise (Usage msg)) fmt
+let printf      = Printf.printf
+let sprintf     = Printf.sprintf
+let version     = "$Id: main.nw 77 2007-03-20 09:54:12Z lindig $"
+let (@@) f x    = f x
+
+let this        = Sys.argv.(0)
+
+type options =
+    { mutable support:      int
+    ; mutable confidence:   float
+    ; mutable difference:   int
+    ; mutable rhs:          int
+    ; mutable width:        int
+    }
+
+let options =
+    { support    =  20
+    ; confidence =  0.9
+    ; difference =  2
+    ; rhs        =  2
+    ; width      =  2
+    }
+
+let synopsis =
+    let s = Printf.sprintf in
+    [ ""
+    ; "usage: "^this^" [options] command [arguments] [file]" 
+    ; ""
+    ; "OPTIONS"
+    ; "-debug               enabling debugging output on stderr"
+    ; ""
+    ; "COMMANDS"
+    ; "dot                  emit concept lattice in dot(1) format"
+    ; "size                 compute lattice size, emit result to stdout"
+    ; "help                 emit this help message to stdout"
+    ; "version              emit program version to stdout"
+    ; "flaws [arguments]    compute rules and rule breakers"
+    ; "  -supp 30           minimum support for a rule (1..)"
+    ; "  -conf 0.9          minimum confidence for a rule (0.0 .. 1.0)"
+    ; "  -diff 2            maximum number of missing features in a flaw"
+    ; "rules [arguments]    compute rules"
+    ; "  -supp 30           minimum support for a rule (1..)"
+    ; "  -rhs  2            minimum size of a rule (1..)"
+    ; ""
+    ; "DEFAULTS"
+    ;s"-supp %d"        options.support
+    ;s"-conf %4.2f"     options.confidence
+    ;s"-diff %d"        options.difference
+    ;s"-rhs  %d"        options.rhs
+    ; ""
+    ; "Author: Christian Lindig http://www.st.cs.uni-sb.de/~lindig/"
+    ]
+    
+let usage msg = List.iter prerr_endline (msg :: synopsis)
+let help ()   = List.iter print_endline synopsis
+
+let version () =
+    List.iter print_endline
+    [ this^" version $Id: main.nw 77 2007-03-20 09:54:12Z lindig $"
+    ; "(c) 2006 Christian Lindig <lindig@cs.uni-sb.de>"
+    ]
+@
+
+<<main.ml>>=
+let open_in     = function Some x -> open_in x  | None  -> stdin
+let open_out    = function Some x -> open_out x | None  -> stdout
+let close_in x  = if x = stdin  then () else close_in  x
+let close_out x = if x = stdout then () else close_out x
+let default x   = function Some x -> x | None -> x
+
+let with_file_io action infile outfile =
+    let ic   = open_in infile           in
+    let info = default "<stdin>" infile in
+    try
+        let oc = open_out outfile in
+        try
+            let res = action info ic oc in close_in ic; close_out oc; res
+        with x ->
+            close_in ic; close_out oc; raise x
+    with x ->
+        close_in ic; raise x
+
+let size            = with_file_io (fun _ -> Lattice.size)
+let dot             = with_file_io (fun _ -> Lattice.dot)
+let flaws defaults  = with_file_io (Rules.flaws 
+                                        ~min_support:defaults.support
+                                        ~min_confidence:defaults.confidence
+                                        ~max_diff:defaults.difference)
+let rules defaults  = with_file_io (Rules.rules 
+                                        ~min_support:defaults.support
+                                        ~min_rhs:defaults.rhs)
+let rules2 defaults = with_file_io (Rules.indep_rules  
+                                        ~min_support:defaults.support
+                                        ~max_confidence:defaults.confidence
+                                        ~min_width:defaults.width)
+
+let intarg   x =
+    try int_of_string x with Failure   _ -> error "not an int: %s" x
+let floatarg x = 
+    try float_of_string x with Failure _ -> error "not a float: %s" x
+
+let is_option str = str <> "" && str.[0] = '-' 
+
+let rec flaws_opts = function
+    | "-supp"   ::x:: args -> options.support    <- intarg x  ; flaws_opts args
+    | "-conf"   ::x:: args -> options.confidence <- floatarg x; flaws_opts args
+    | "-diff"   ::x:: args -> options.difference <- intarg x  ; flaws_opts args
+    | x :: args when is_option x -> error "illegal flaws option %s" x
+    | args                  -> args
+
+let rec rules2_opts = function
+    | "-supp"   ::x:: args -> options.support    <- intarg x  ; rules2_opts args
+    | "-conf"   ::x:: args -> options.confidence <- floatarg x; rules2_opts args
+    | "-width"  ::x:: args -> options.width      <- intarg   x; rules2_opts args
+    | x :: args when is_option x -> error "illegal rules2 option %s" x
+    | args                  -> args
+
+
+let rec rules_opts = function
+    | "-supp"   ::x:: args -> options.support    <- intarg x  ; rules_opts args
+    | "-rhs"    ::x:: args -> options.rhs        <- intarg x  ; rules_opts args
+    | x :: args when is_option x -> error "illegal rules option %s" x
+    | args                  -> args
+
+let rec general_opts = function
+    | "-debug"      :: args -> Debug.on true ; general_opts args
+    | "-h"          :: []   -> ["help"]
+    | "-help"       :: []   -> ["help"]
+    | "-version"    :: []   -> ["version"]
+    | x :: args when is_option x -> error "illegal general option %s" x
+    | args                  -> args
+
+let main () =
+    let argv        = Array.to_list Sys.argv in
+    let args        = List.tl  argv in
+    let cmd = function
+        | ["version"]  -> version ()
+        | ["help"]     -> help ()
+        | ["size"; x]  -> size (Some x) None
+        | ["size"]     -> size None     None
+        | ["dot" ; x]  -> dot  (Some x) None
+        | ["dot" ]     -> dot  None     None
+        | "flaws" :: opts -> 
+            ( match flaws_opts opts with
+            | []       -> flaws options None     None
+            | [x]      -> flaws options (Some x) None
+            | x::xs    -> error "unexpected file(s) %s" @@ String.concat " " xs
+            )
+        | "rules" :: opts ->
+            ( match rules_opts opts with
+            | []       -> rules options None     None 
+            | [x]      -> rules options (Some x) None
+            | x::xs    -> error "unexpected file(s) %s" @@ String.concat " " xs
+            ) 
+        | "rules2" :: opts ->
+            ( match rules2_opts opts with
+            | []       -> rules2 options None     None 
+            | [x]      -> rules2 options (Some x) None
+            | x::xs    -> error "unexpected file(s) %s" @@ String.concat " " xs
+            ) 
+        | x:: _        -> error "error: illegal command line argument %s" x 
+        | []           -> error "error: expected a command"
+    in              
+        try cmd @@ general_opts args with Usage msg -> (usage msg; exit 1)
+
+let () = if !Sys.interactive then () else main ()
+@
+
+
+

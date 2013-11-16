@@ -1,0 +1,197 @@
+
+\section{Bitset}
+
+This module provides applicative finite sets with standard set
+operations. Unlike the OCaml [[Set]] implementation, a set provided by
+this module is finite and the set domain must be supplied upon creation
+of a set.  
+
+We call two sets compatible, if their origins can be traced back to the
+same [[make]] call that created a set of a given domain. Only compatible
+sets can be joined or compared and it is a checked runtime error to try
+otherwise.  Note that compatibility is a stronger criterion than domain
+equality. Unfortunately it destroys composability: we can't create two
+sets (over the same domain) independently and compare them. On the plus
+side, compatibility is very effcient to check, which is why we chose it.
+
+A set is polymorphic over the element type. I chose this for convenience
+over a functor design but it may cause trouble down the line.
+
+<<bitset.mli>>=
+exception Error of string
+type 'a t                                   (* set over 'a *)
+
+val make:           'a list -> 'a t         (* initially empty     *)
+val size:           'a t -> int             (* size of domain      *)
+val isempty:        'a t -> bool
+val compatible:     'a t -> 'a t -> bool    (* true, if compatible *)
+@
+
+Member operations are standard. The [[count]] function returns the number
+of elements present in a set---in contrast to [[size]] which returns the
+maximum number of elements (the size of domain).
+
+<<bitset.mli>>=
+val add:            'a -> 'a t -> 'a t
+val remove:         'a -> 'a t -> 'a t
+val ismember:       'a -> 'a t -> bool
+val count:          'a t -> int             (* elements in set *)
+@
+
+Each member of a domain has an integer index ($0, \dots, [[size t]]$):
+[[index]] returns an element index, while [[member]] returns the member
+belonging to an index. Function [[members]] returns the index list of
+all members present in a set. For convenience, and less efficient,
+[[members]] returns the list of members directly.
+
+<<bitset.mli>>=
+type index = int
+
+val index:          'a t -> 'a -> index   (* 0 .. size-1 *)
+val member:         'a t -> index -> 'a
+val members:        'a t -> index list
+val members':       'a t -> 'a list
+val fold:           'a t -> ('a t -> index -> 'b -> 'b) -> 'b -> 'b
+@
+
+The linearity requirement enforced by the notion of compatibility
+becomes appearent here: to create an empty or filled set we need a set
+to start with. Since we are applicative, the original set is not
+altered. 
+ 
+<<bitset.mli>>= 
+val empty:          'a t -> 'a t
+val fill:           'a t -> 'a t
+@
+
+Compatible sets may be compared for the following relations: equality,
+subset, and proper subset. Function [[compare]] provides a total order
+over compatible sets. The [[compare]] function respects the subset
+relation: if $a \subset b$ then $[[compare a b]] < 0$; however, the
+converse does not hold.
+
+<<bitset.mli>>=
+val compare:        'a t -> 'a t -> int  (* -1 / 0 / 1 *)
+val subset:         'a t -> 'a t -> bool
+val subseteq:       'a t -> 'a t -> bool
+val equal:          'a t -> 'a t -> bool
+@
+
+Unary and binary set operations over compatible sets. For performance,
+we also offer [[unions]] and [[intersections]] that operate on lists of
+sets.
+
+<<bitset.mli>>=
+val complement:     'a t -> 'a t
+
+val union:          'a t -> 'a t -> 'a t
+val intersect:      'a t -> 'a t -> 'a t
+val minus:          'a t -> 'a t -> 'a t
+val difference:     'a t -> 'a t -> 'a t
+
+val unions:         'a t -> 'a t list -> 'a t
+val intersects:     'a t -> 'a t list -> 'a t
+@
+
+
+\subsection{Implementation}
+
+<<bitset.ml>>=
+module H = Hashtbl
+module V = Bitvec
+
+exception Error of string
+let error fmt = Printf.kprintf (fun msg -> raise (Error msg)) fmt
+let (@@) f x  = f x
+
+type 'a t =
+    { map:      ('a, int) H.t   (* maps element to index    *)
+    ; rev:      'a array        (* maps index to element    *)
+    ; vec:      V.t             (* bit vector over elements *)
+    ; id:       unit ref        (* ID to decide compatibility *)
+    }
+
+type index = int
+
+let make elems =
+    let size = List.length elems in
+    let set   =
+        { map   = H.create size
+        ; rev   = Array.of_list elems
+        ; vec   = V.make size 
+        ; id    = ref ()
+        } in
+    let add index elem = (H.add set.map elem index; index+1) in   
+        ( ignore @@ List.fold_left add 0 elems
+        ; set
+        )
+@
+
+Two sets are compatible when their IDs are pointer equal. This works
+because a [[ref ()]] value is unique.
+
+<<bitset.ml>>=
+let compatible x y = x.id == y.id
+let size set = V.size set.vec
+
+let index set elem =
+    try 
+        H.find set.map elem
+    with Not_found -> error "element outside set domain"
+
+let member set index = 
+    try
+        set.rev.(index)
+    with 
+        Invalid_argument(_) -> 
+            error "index %d outside 0..%d" index (size set - 1)
+
+let fold set f acc = V.fold set.vec (f set) acc
+
+let copy set = 
+    { map = set.map
+    ; rev   = set.rev
+    ; vec   = V.copy set.vec
+    ; id    = set.id
+    }
+
+let clone set f = let set = copy set in f set; set
+
+let add elem set = 
+    clone set (fun set -> V.put set.vec (index set elem) true) 
+
+let remove elem set =
+    clone set (fun set -> V.put set.vec (index set elem) false)
+    
+let ismember elem set   = V.get set.vec (index set elem)
+let isempty set         = V.isempty set.vec
+let count set           = V.count set.vec
+let empty set           = clone set (fun set -> V.clear set.vec)
+let fill  set           = clone set (fun set -> V.fill  set.vec)
+let complement set      = clone set (fun set -> V.complement set.vec)
+
+let cmp op x y          = assert (compatible x y); op x.vec y.vec
+let compare x y         = cmp V.compare x y
+let subset x y          = cmp V.lt x y
+let subseteq x y        = cmp V.le x y
+let equal x y           = cmp V.eq x y
+
+let setop op x y        = ( assert (compatible x y)
+                          ; clone x (fun x -> op x.vec y.vec)
+                          )
+let union x y       = setop V.union x y
+let intersect x y   = setop V.inter x y
+let minus x y       = setop V.minus x y
+let difference x y  = setop V.diff x y
+
+let setop' op x ys = 
+    let f x y = assert (compatible x y); op x.vec y.vec; x in
+       List.fold_left f (copy x) ys
+
+let unions     x ys = setop' V.union x ys
+let intersects x ys = setop' V.inter x ys
+
+let fold set f init = V.fold set.vec (f set) init
+let members set     = V.members set.vec
+let members' set    = List.map (member set) (V.members set.vec)
+@
