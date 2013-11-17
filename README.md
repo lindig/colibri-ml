@@ -103,8 +103,34 @@ using nroff:
 ## Development Documentation
 
 This software is implemented as a literate program - the source code are
-the *.nw (NoWeb) files that contain LaTeX documentation and OCaml source
+the `*.nw` (NoWeb) files that contain LaTeX documentation and OCaml source
 code. For compilation source code is automatically extracted.
+
+## Applications
+
+Directory `doc/` contains a paper that uses formal concept analysis to find
+anomalies in software that may indicate bugs. The idea is to find frequent
+patterns and few deviations from these patterns could indicate a problem.
+Pattern and deviations from patterns are formalized in a framework of
+formal concepts. This was later used in this paper:
+
+    @inproceedings{wasylkowski2007FSE,
+        title={Detecting object usage anomalies},
+        author={Wasylkowski, Andrzej 
+            and Zeller, Andreas 
+            and Lindig, Christian},
+        booktitle={Proceedings of the the 6th joint meeting of the European
+            software engineering conference and the 
+            ACM SIGSOFT symposium on The foundations of 
+            software engineering},
+        pages={35--44},
+        year={2007},
+        organization={ACM}
+    }
+
+You can find some more papers using formal concept analysis here:
+
+    http://scholar.google.de/citations?user=M8QezN0AAAAJ
 
 ##  Download
 

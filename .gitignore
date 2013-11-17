@@ -1,0 +1,7 @@
+*.ml
+*.mli
+*.mll
+*.mly
+_build
+libsrc/nice*
+main.native

@@ -131,12 +131,11 @@ line.
 =head1 AUTHOR
 
 Please send feedback, bug reports, and experience reports to the author:
-Christian Lindig <lindig@cs.uni-sb.de>
-L<http://www.st.cs.uni-sb.de/~lindig/>
+Christian Lindig <lindig@gmail.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006 Christian Lindig <lindig@eecs.harvard.edu>. All
+Copyright (c) 2006-2013 Christian Lindig <lindig@gmail.com>. All
 rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -172,15 +171,14 @@ TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 
-=head1 VERSION
+=head1 SOURCE CODE
 
- $Id: colibri.pod 66 2006-11-27 13:26:34Z lindig $
+L<https://github.com/lindig/colibri-ml>
 
 =head1 SEE ALSO 
 
 dot(1)
 
-L<http://www.st.cs.uni-sb.de/~lindig/>
 
 
 
