@@ -5,6 +5,7 @@ PREFIX  = $(HOME)
 NAME	= colibri
 BINDIR	= $(PREFIX)/bin
 MAN1DIR = $(PREFIX)/man/man1
+LIPSUM  = https://github.com/lindig/lipsum.git
 
 LP	= ./lipsum/lipsum.native
 OCB	= ocamlbuild
@@ -35,6 +36,10 @@ install: all doc/colibri.1
 %.1:	%.pod
 	pod2man $< > $@
 
+# update lipsum subtree from upstream
+update:
+	git subtree pull --prefix lipsum $(LIPSUM) master --squash
+	
 lipsum:	FORCE    
 	$(MAKE) -C lipsum all
 
