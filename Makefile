@@ -17,8 +17,8 @@ all:	src
 	$(OCB) -I src -I libsrc main.native
 
 src:	lipsum
-	cd libsrc; for f in *.nw; do ../$(LP) expand -f cpp $$f; done
-	cd    src; for f in *.nw; do ../$(LP) expand -f cpp $$f; done
+	cd libsrc; for f in *.nw; do ../$(LP) expand -f cpp '*.ml*' $$f;done
+	cd    src; for f in *.nw; do ../$(LP) expand -f cpp '*.ml*' $$f;done
 
 clean:	
 	$(OCB) -I src -I libsrc -clean
