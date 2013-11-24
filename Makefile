@@ -25,6 +25,7 @@ clean:
 	$(OCB) -I src -I libsrc -clean
 	rm -f *src/*.ml *src/*.mli *src/*.mly *src/*.mll
 	rm -f libsrc/nice*
+	rm -f doc/colibri.1
 
 clobber: clean
 	$(MAKE) -C lipsum clean
