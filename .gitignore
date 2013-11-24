@@ -2,8 +2,8 @@
 *.mli
 *.mll
 *.mly
-_build
-libsrc/nice*
+/libsrc/nice*
 main.native
-
 /doc/colibri.1
+_build/
+
