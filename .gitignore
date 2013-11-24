@@ -5,3 +5,5 @@
 _build
 libsrc/nice*
 main.native
+
+/doc/colibri.1
