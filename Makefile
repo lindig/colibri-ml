@@ -6,6 +6,7 @@ NAME	= colibri
 BINDIR	= $(PREFIX)/bin
 MAN1DIR = $(PREFIX)/man/man1
 LIPSUM  = https://github.com/lindig/lipsum.git
+BINEXT  = native
 
 LP	= ./lipsum/lipsum.native
 OCB	= ocamlbuild
@@ -14,7 +15,7 @@ OCB	= ocamlbuild
 .PHONY: all clean install test
 
 all:	src
-	$(OCB) -I src -I libsrc main.native
+	$(OCB) -I src -I libsrc main.$(BINEXT)
 
 src:	lipsum
 	cd libsrc; for f in *.nw; do ../$(LP) expand -f cpp '*.ml*' $$f;done
@@ -30,8 +31,8 @@ clobber: clean
 	rm -f doc/colibri.1
 
 install: all doc/colibri.1
-	install $(NAME).$(BINEXT) $(BINDIR)/$(NAME) 
-	install doc/$(NAME).man $(MAN1DIR)/$(NAME).1
+	install main.$(BINEXT) $(BINDIR)/colibri 
+	install doc/colibri.1 $(MAN1DIR)/colibri.1
 
 %.1:	%.pod
 	pod2man $< > $@
