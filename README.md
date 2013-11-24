@@ -108,11 +108,12 @@ code. For compilation source code is automatically extracted.
 
 ## Applications
 
-Directory `doc/` contains a paper that uses formal concept analysis to find
-anomalies in software that may indicate bugs. The idea is to find frequent
-patterns and few deviations from these patterns could indicate a problem.
-Pattern and deviations from patterns are formalized in a framework of
-formal concepts. This was later used in this paper:
+Directory `doc/` contains a [paper](doc/mining-patterns.pdf) that uses
+formal concept analysis to find anomalies in software that may indicate
+bugs. The idea is to find frequent patterns and few deviations from these
+patterns could indicate a problem.  Pattern and deviations from patterns
+are formalized in a framework of formal concepts. This was later used in
+this paper:
 
     @inproceedings{wasylkowski2007FSE,
         title={Detecting object usage anomalies},
